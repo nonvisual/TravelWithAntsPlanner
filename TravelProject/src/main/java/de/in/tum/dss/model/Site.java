@@ -11,7 +11,7 @@ import javax.persistence.Transient;
 @Entity
 @Table(name = "site")
 
-public class Site {
+public final class Site {
 	public static final double HELI_SPEED = 80; // km per hour
 	public static final int R = 6371; // earth radius
 
@@ -38,21 +38,29 @@ public class Site {
 	@Column(name = "country")
 	private String country;
 
-	@Transient
-	private double baseScore;
-
-	@Transient
-	private double pheromones;
-
 	public enum Category {
 		Cultural, Natural, Mixed
+	}
+
+	private Site() {
+		//default constructor for hibernate
+	}
+	public Site(String siteName, boolean isEndangered, double latitude, double longitude, Category category,
+			String country) {
+		super();
+		this.siteName = siteName;
+		this.isEndangered = isEndangered;
+		this.latitude = latitude;
+		this.longitude = longitude;
+		this.category = category;
+		this.country = country;
 	}
 
 	public int getId() {
 		return id;
 	}
 
-	public void setId(int id) {
+	private void setId(int id) {
 		this.id = id;
 	}
 
@@ -60,7 +68,7 @@ public class Site {
 		return siteName;
 	}
 
-	public void setSiteName(String siteName) {
+	private void setSiteName(String siteName) {
 		this.siteName = siteName;
 	}
 
@@ -68,7 +76,7 @@ public class Site {
 		return isEndangered;
 	}
 
-	public void setEndangered(boolean isEndangered) {
+	private void setEndangered(boolean isEndangered) {
 		this.isEndangered = isEndangered;
 	}
 
@@ -76,7 +84,7 @@ public class Site {
 		return latitude;
 	}
 
-	public void setLatitude(double latitude) {
+	private void setLatitude(double latitude) {
 		this.latitude = latitude;
 	}
 
@@ -84,7 +92,7 @@ public class Site {
 		return longitude;
 	}
 
-	public void setLongitude(double longitude) {
+	private void setLongitude(double longitude) {
 		this.longitude = longitude;
 	}
 
@@ -92,7 +100,7 @@ public class Site {
 		return category;
 	}
 
-	public void setCategory(Category category) {
+	private void setCategory(Category category) {
 		this.category = category;
 	}
 
@@ -100,24 +108,8 @@ public class Site {
 		return country;
 	}
 
-	public void setCountry(String country) {
+	private void setCountry(String country) {
 		this.country = country;
-	}
-
-	public double getBaseScore() {
-		return baseScore;
-	}
-
-	public void setBaseScore(double baseScore) {
-		this.baseScore = baseScore;
-	}
-
-	public double getPheromones() {
-		return pheromones;
-	}
-
-	public void setPheromones(double pheromones) {
-		this.pheromones = pheromones;
 	}
 
 	/**
@@ -136,24 +128,6 @@ public class Site {
 		double distance = R * c / HELI_SPEED;
 
 		return distance;
-	}
-
-	public static double distance(double lat1, double lat2, double lon1, double lon2, double el1, double el2) {
-
-		// Radius of the earth
-
-		double latDistance = Math.toRadians(lat2 - lat1);
-		double lonDistance = Math.toRadians(lon2 - lon1);
-		double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2) + Math.cos(Math.toRadians(lat1))
-				* Math.cos(Math.toRadians(lat2)) * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
-		double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-		double distance = R * c * 1000; // convert to meters
-
-		double height = el1 - el2;
-
-		distance = Math.pow(distance, 2) + Math.pow(height, 2);
-
-		return Math.sqrt(distance);
 	}
 
 	@Override
@@ -189,6 +163,6 @@ public class Site {
 
 	@Override
 	public String toString() {
-		return "Site: " + id + " name: " + siteName ;
+		return "Site: " + id + " name: " + siteName;
 	}
 }

@@ -6,7 +6,7 @@ import java.util.Set;
 
 import de.in.tum.dss.optimization.TravelOptimizer;
 
-public class Travel {
+public final class Travel{
 	private final List<Site> destinations;
 	private final double timeSpent;
 	private final double totalScore;

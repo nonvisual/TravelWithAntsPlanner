@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 
 import de.in.tum.dss.model.DBManager;
 import de.in.tum.dss.model.Site;
+import de.in.tum.dss.model.Site.Category;
 import de.in.tum.dss.model.Travel;
 
 /**
@@ -21,10 +22,12 @@ import de.in.tum.dss.model.Travel;
  */
 public class AntColonyOptimizer implements TravelOptimizer {
 
-	private double lookUpTimeRange = 25;
 	private Map<Site, Double> pheromones;
 	private double pheromoneFadeSpeed = 0.9;
 	private double algorithmGreed = 0.5;
+	private double lookUpTimeRange = 25;
+	private int threadsNumber = 4;
+
 	public static final Logger LOG = Logger.getLogger(AntColonyOptimizer.class);
 
 	public Travel findBestRoute(double longitude, double latitude, double timeBudget, double timeOut) {
@@ -35,22 +38,21 @@ public class AntColonyOptimizer implements TravelOptimizer {
 			pheromones.put(site, 1.0);
 		}
 
-		Site startSite = new Site();
-		startSite.setLatitude(latitude);
-		startSite.setLongitude(longitude);
-		startSite.setSiteName("Starting Point");
-		startSite.setCountry("Unknown");
+		final Site startSite = new Site("Starting Point", false, latitude, longitude, Category.Cultural, "Unknown");
+
 		Travel bestRoute = null;
 
 		// find the closest point
 		double smallestDistance = Double.MAX_VALUE;
-		Site closestSite = null;
+		Site closest = null;
 		for (Site site : allSites) {
 			if (site.distanceToSite(startSite) < smallestDistance) {
 				smallestDistance = site.distanceToSite(startSite);
-				closestSite = site;
+				closest = site;
 			}
 		}
+		final Site closestSite = closest;
+
 		// if no enough time to visit even the closest destinations, return only
 		// one point
 		if (2 * smallestDistance + STAY_TIME > timeBudget) {
@@ -60,46 +62,34 @@ public class AntColonyOptimizer implements TravelOptimizer {
 		}
 		double startTime = System.currentTimeMillis() / 1000;
 
-		while (System.currentTimeMillis() / 1000 - startTime < timeOut) {
-			// make new ant run
-			List<Site> destinations = new ArrayList<Site>();
-			destinations.add(startSite);
-			destinations.add(closestSite);
-
-			double timeLeft = timeBudget-STAY_TIME - closestSite.distanceToSite(startSite);
-			Site currentSite = closestSite;
-			Site nextSite = null;
-			do {
-				List<Site> neighbors = DBManager.INSTANCE.getNeighborSites(lookUpTimeRange, currentSite);
-				neighbors.removeAll(destinations);
-				nextSite = chooseNextSite(timeLeft, neighbors, currentSite, startSite);
-				if (nextSite == null) {
-					// increased lookup range
-					neighbors = DBManager.INSTANCE.getNeighborSites(100, currentSite);
-					neighbors.removeAll(destinations);
-					nextSite = chooseNextSite(timeLeft, neighbors, currentSite, startSite);
-				}
-				destinations.add(nextSite);
-				timeLeft -= (nextSite.distanceToSite(currentSite) + STAY_TIME);
-				currentSite = nextSite;
-			} while (nextSite != startSite);
-
-			// after run count TravelScore
-			Travel currentRun = new Travel(destinations);
-			if (bestRoute == null || currentRun.getTotalScore() > bestRoute.getTotalScore()) {
-				bestRoute = currentRun;
-			}
-			LOG.info("Ant runs, score: " + currentRun.getTotalScore() + ", time left "
-					+ (System.currentTimeMillis() / 1000 - startTime) + " / " + timeOut);
-
-			updatePheromones(currentRun, timeBudget);
-
+		AntRun[] threads = new AntRun[threadsNumber];
+		for (int i = 0; i < threadsNumber; i++) {
+			threads[i] = new AntRun(startSite, closestSite, timeBudget);
 		}
+		// while (System.currentTimeMillis() / 1000 - startTime < timeOut) {
+		for (AntRun thread : threads) {
+			thread.start();
+		}
+		for (AntRun thread : threads) {
+			try {
+				thread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		for (AntRun thread : threads) {
+			if (bestRoute == null || thread.getRoute().getTotalScore() > bestRoute.getTotalScore()) {
+				bestRoute = thread.getRoute();
+			}
+		}
+
+		// }
 		return bestRoute;
 	}
 
 	// updating pheromones after the ant's run
-	private void updatePheromones(Travel currentRun, double timeBudget) {
+	private synchronized void updatePheromones(Travel currentRun, double timeBudget) {
 		// all fade
 		// TODO use lambda expressions
 		for (Entry<Site, Double> entry : pheromones.entrySet()) {
@@ -162,6 +152,111 @@ public class AntColonyOptimizer implements TravelOptimizer {
 		}
 		// if probs list is empty
 		return -1;
+	}
+
+	/**
+	 * 
+	 * @return parameter with which pheromone value is decreasing
+	 */
+	public double getPheromoneFadeSpeed() {
+		return pheromoneFadeSpeed;
+	}
+
+	/**
+	 * 
+	 * @param pheromoneFadeSpeed
+	 *            pheromone decrease value
+	 */
+	public void setPheromoneFadeSpeed(double pheromoneFadeSpeed) {
+		this.pheromoneFadeSpeed = pheromoneFadeSpeed;
+	}
+
+	/**
+	 * 
+	 * @return greed parameter of the ant colony algorithm
+	 */
+	public double getAlgorithmGreed() {
+		return algorithmGreed;
+	}
+
+	/**
+	 * 
+	 * @param algorithmGreed
+	 *            greed parameter of the ant colony algorithm
+	 */
+	public void setAlgorithmGreed(double algorithmGreed) {
+		this.algorithmGreed = algorithmGreed;
+	}
+
+	/**
+	 * 
+	 * @return current hour range in which search for the next site will be done
+	 */
+	public double getLookUpTimeRange() {
+		return lookUpTimeRange;
+	}
+
+	/**
+	 * Sets look up time value. While the higher values do not restric
+	 * optimality, the do decrease computation speed since we have fully
+	 * connected graph.
+	 * 
+	 * @param lookUpTimeRange
+	 */
+	public void setLookUpTimeRange(double lookUpTimeRange) {
+		this.lookUpTimeRange = lookUpTimeRange;
+	}
+
+	private class AntRun extends Thread {
+		private Travel route;
+		private Site startSite;
+		private Site closestSite;
+		private double timeBudget;
+
+		public AntRun(Site startSite, Site closestSite, double timeBudget) {
+			super();
+			this.startSite = startSite;
+			this.closestSite = closestSite;
+			this.timeBudget = timeBudget;
+		}
+
+		@Override
+		public void start() {
+			LOG.info("Ant run started ");
+			System.out.println("Ant started");
+			List<Site> destinations = new ArrayList<Site>();
+			destinations.add(startSite);
+			destinations.add(closestSite);
+
+			double timeLeft = timeBudget - STAY_TIME - closestSite.distanceToSite(startSite);
+			Site currentSite = closestSite;
+			Site nextSite = null;
+			do {
+				List<Site> neighbors = DBManager.INSTANCE.getNeighborSites(lookUpTimeRange, currentSite);
+				neighbors.removeAll(destinations);
+				nextSite = chooseNextSite(timeLeft, neighbors, currentSite, startSite);
+				if (nextSite == null) {
+					// increased lookup range
+					neighbors = DBManager.INSTANCE.getNeighborSites(100, currentSite);
+					neighbors.removeAll(destinations);
+					nextSite = chooseNextSite(timeLeft, neighbors, currentSite, startSite);
+				}
+				destinations.add(nextSite);
+				timeLeft -= (nextSite.distanceToSite(currentSite) + STAY_TIME);
+				currentSite = nextSite;
+			} while (nextSite != startSite);
+
+			// after run count TravelScore
+			route = new Travel(destinations);
+			LOG.info("Ant run thread " + route.getTotalScore());
+			updatePheromones(route, timeBudget);
+
+		}
+
+		public Travel getRoute() {
+			return route;
+		}
+
 	}
 
 }

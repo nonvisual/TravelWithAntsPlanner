@@ -13,7 +13,7 @@ public class AntColonyOptimizerTest {
 	@Test
 	public void testFindBestRoute1() throws IOException {
 		AntColonyOptimizer optimizer = new AntColonyOptimizer();
-		Travel travel = optimizer.findBestRoute(0, 0, 24, 10);
+		Travel travel = optimizer.findBestRoute(0, 0, 24, 15);
 
 		// only possible to visit next Site, so +2 for country + 1 point for
 		// site
