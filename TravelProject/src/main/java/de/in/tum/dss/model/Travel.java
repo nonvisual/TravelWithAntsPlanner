@@ -1,11 +1,20 @@
 package de.in.tum.dss.model;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import de.in.tum.dss.optimization.TravelOptimizer;
+import org.hibernate.annotations.Immutable;
 
+import de.in.tum.dss.optimization.TravelOptimizer;
+/**
+ * The class is immutable
+ * @author nonvi
+ *
+ */
+@Immutable
 public final class Travel{
 	private final List<Site> destinations;
 	private final double timeSpent;
@@ -13,7 +22,7 @@ public final class Travel{
 
 	public Travel(List<Site> destinations) {
 		super();
-		this.destinations = destinations;
+		this.destinations = Collections.unmodifiableList(destinations);
 		this.totalScore = computeTotalScore();
 		double timeSpent = 0;
 		for (int i = 0; i < destinations.size() - 1; i++) {
@@ -24,11 +33,11 @@ public final class Travel{
 		this.timeSpent = timeSpent- TravelOptimizer.STAY_TIME;
 	}
 
-	public List<Site> getDestinations() {
+	public synchronized List<Site> getDestinations() {
 		return destinations;
 	}
 
-	public double getTimeSpent() {
+	public synchronized double getTimeSpent() {
 		return timeSpent;
 	}
 
@@ -39,7 +48,7 @@ public final class Travel{
 	 * 
 	 * @return total score for the travel
 	 */
-	public double getTotalScore() {
+	public synchronized double getTotalScore() {
 		return totalScore;
 	}
 
@@ -59,4 +68,5 @@ public final class Travel{
 		return score;
 	}
 
+	
 }

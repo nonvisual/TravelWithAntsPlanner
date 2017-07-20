@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.apache.log4j.Logger;
 
@@ -40,8 +43,6 @@ public class AntColonyOptimizer implements TravelOptimizer {
 
 		final Site startSite = new Site("Starting Point", false, latitude, longitude, Category.Cultural, "Unknown");
 
-		Travel bestRoute = null;
-
 		// find the closest point
 		double smallestDistance = Double.MAX_VALUE;
 		Site closest = null;
@@ -62,30 +63,19 @@ public class AntColonyOptimizer implements TravelOptimizer {
 		}
 		double startTime = System.currentTimeMillis() / 1000;
 
-		AntRun[] threads = new AntRun[threadsNumber];
-		for (int i = 0; i < threadsNumber; i++) {
-			threads[i] = new AntRun(startSite, closestSite, timeBudget);
-		}
-		// while (System.currentTimeMillis() / 1000 - startTime < timeOut) {
-		for (AntRun thread : threads) {
-			thread.start();
-		}
-		for (AntRun thread : threads) {
+		ExecutorService ex = Executors.newFixedThreadPool(threadsNumber);
+		BestRoute bestRoute = new BestRoute();
+		while (System.currentTimeMillis() / 1000 - startTime < timeOut) {
 			try {
-				thread.join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+//				LOG.info("Adding new thread to executor");
+				ex.execute(new AntRun(startSite, closestSite, timeBudget,bestRoute));
+			} catch (RejectedExecutionException e) {
+				if (!ex.isShutdown())
+					LOG.info("Task is rejected", e);
 			}
-		}
+		}ex.shutdown();
 
-		for (AntRun thread : threads) {
-			if (bestRoute == null || thread.getRoute().getTotalScore() > bestRoute.getTotalScore()) {
-				bestRoute = thread.getRoute();
-			}
-		}
-
-		// }
-		return bestRoute;
+		return bestRoute.getBestRoute();
 	}
 
 	// updating pheromones after the ant's run
@@ -108,7 +98,7 @@ public class AntColonyOptimizer implements TravelOptimizer {
 
 	}
 
-	// chooses next site stohasticaly given the pheromones values
+	// chooses next site stochastically given the pheromones values
 	private Site chooseNextSite(double timeLeft, List<Site> neighbors, Site currentSite, Site startSite) {
 
 		// list of probabilities
@@ -140,6 +130,7 @@ public class AntColonyOptimizer implements TravelOptimizer {
 		return potentialSite;
 	}
 
+	
 	// chooses index using probabilities
 	private int chooseIndex(List<Double> probs) {
 		double draw = Math.random();
@@ -207,17 +198,39 @@ public class AntColonyOptimizer implements TravelOptimizer {
 		this.lookUpTimeRange = lookUpTimeRange;
 	}
 
+	private class BestRoute {
+		// guarded by this, immutable
+		private Travel travel;
+
+		public synchronized void updateBestRoute(Travel newTravel) {
+			if (travel == null || newTravel.getTotalScore() > travel.getTotalScore()) {
+				travel = newTravel;
+			}
+		}
+
+		public synchronized Travel getBestRoute() {
+			return travel;
+		}
+	}
+
 	private class AntRun extends Thread {
 		private Travel route;
 		private Site startSite;
 		private Site closestSite;
 		private double timeBudget;
-
-		public AntRun(Site startSite, Site closestSite, double timeBudget) {
+		private BestRoute bestRoute;
+		
+		public AntRun(Site startSite, Site closestSite, double timeBudget, BestRoute bestRoute) {
 			super();
 			this.startSite = startSite;
 			this.closestSite = closestSite;
 			this.timeBudget = timeBudget;
+			this.bestRoute=bestRoute;
+		}
+		
+		@Override
+		public void run() {
+			start();
 		}
 
 		@Override
@@ -250,11 +263,8 @@ public class AntColonyOptimizer implements TravelOptimizer {
 			route = new Travel(destinations);
 			LOG.info("Ant run thread " + route.getTotalScore());
 			updatePheromones(route, timeBudget);
+			bestRoute.updateBestRoute(route);
 
-		}
-
-		public Travel getRoute() {
-			return route;
 		}
 
 	}

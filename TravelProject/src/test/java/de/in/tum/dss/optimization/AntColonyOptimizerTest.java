@@ -25,7 +25,7 @@ public class AntColonyOptimizerTest {
 	@Test
 	public void testFindBestRoute2() throws IOException {
 		AntColonyOptimizer optimizer = new AntColonyOptimizer();
-		Travel travel = optimizer.findBestRoute(0, 0, 34, 10);
+		Travel travel = optimizer.findBestRoute(0, 0, 35, 10);
 
 		// only possible to visit next Site, so +2 for country + 2 point for 2
 		// sites
@@ -35,5 +35,19 @@ public class AntColonyOptimizerTest {
 		assertTrue(travel.getTimeSpent() < 34.0);
 	}
 
+	@Test
+	public void simpleRun() throws IOException {
+		AntColonyOptimizer optimizer = new AntColonyOptimizer();
+		Travel travel = optimizer.findBestRoute(0, 0, 504, 20);
+
+		// only possible to visit next Site, so +2 for country + 2 point for 2
+		// sites
+		System.out.println(travel.getTotalScore());
+
+		assertTrue(travel.getTotalScore() == 4.0);
+		assertTrue(travel.getTimeSpent() < 34.0);
+	}
+
+	
 	
 }
